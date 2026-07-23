@@ -1,65 +1,157 @@
-import Image from "next/image";
+import { createClient } from "@/lib/supabase/server";
+import { addNote, deleteNote } from "./actions";
 
-export default function Home() {
+type Note = {
+  id: number;
+  title: string;
+  created_at: string;
+};
+
+// ตรวจว่าตั้งค่า env แล้วหรือยัง
+const isConfigured =
+  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export default async function Home() {
+  let notes: Note[] = [];
+  let errorMessage: string | null = null;
+
+  if (isConfigured) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) errorMessage = error.message;
+    else notes = (data as Note[]) ?? [];
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-6 py-16">
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+            Next.js 16 + Tailwind 4 + Supabase
+          </span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <h1 className="text-3xl font-bold tracking-tight">โน้ตของฉัน</h1>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          ตัวอย่างเชื่อมต่อฐานข้อมูล Supabase — ข้อมูลถูกเก็บใน Postgres จริง
+        </p>
+      </header>
+
+      {!isConfigured ? (
+        <SetupGuide />
+      ) : errorMessage ? (
+        <ErrorCard message={errorMessage} />
+      ) : (
+        <>
+          <form action={addNote} className="flex gap-2">
+            <input
+              name="title"
+              placeholder="พิมพ์โน้ตใหม่ที่นี่..."
+              required
+              className="flex-1 rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-neutral-700 dark:bg-neutral-900"
             />
-            Deploy Now
-          </a>
+            <button
+              type="submit"
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 active:scale-95"
+            >
+              เพิ่ม
+            </button>
+          </form>
+
+          <ul className="flex flex-col gap-2">
+            {notes.length === 0 && (
+              <li className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-400 dark:border-neutral-700">
+                ยังไม่มีโน้ต ลองเพิ่มอันแรกดูสิ
+              </li>
+            )}
+            {notes.map((note) => (
+              <li
+                key={note.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <div className="flex flex-col">
+                  <span className="text-sm">{note.title}</span>
+                  <span className="text-xs text-neutral-400">
+                    {new Date(note.created_at).toLocaleString("th-TH")}
+                  </span>
+                </div>
+                <form action={deleteNote}>
+                  <input type="hidden" name="id" value={note.id} />
+                  <button
+                    type="submit"
+                    className="rounded-md px-2 py-1 text-xs text-neutral-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                  >
+                    ลบ
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </main>
+  );
+}
+
+function SetupGuide() {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-amber-50 p-6 text-sm dark:border-amber-800/60 dark:bg-amber-950/30">
+      <p className="font-semibold text-amber-800 dark:text-amber-300">
+        ⚠️ ยังไม่ได้เชื่อม Supabase
+      </p>
+      <ol className="list-inside list-decimal space-y-2 text-amber-900 dark:text-amber-200/90">
+        <li>
+          สร้างโปรเจกต์ที่{" "}
           <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+            href="https://supabase.com/dashboard"
+            className="font-medium underline"
             target="_blank"
-            rel="noopener noreferrer"
           >
-            Documentation
+            supabase.com/dashboard
           </a>
-        </div>
-      </main>
+        </li>
+        <li>
+          คัดลอก URL และ anon key จาก{" "}
+          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
+            Project Settings → API
+          </code>{" "}
+          มาใส่ในไฟล์{" "}
+          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
+            .env.local
+          </code>
+        </li>
+        <li>
+          รัน SQL ในไฟล์{" "}
+          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
+            supabase/schema.sql
+          </code>{" "}
+          ที่ SQL Editor
+        </li>
+        <li>รีสตาร์ท dev server แล้วรีเฟรชหน้านี้</li>
+      </ol>
+      <p className="text-amber-700 dark:text-amber-300/70">
+        ดูขั้นตอนละเอียดในไฟล์ <code>README.md</code>
+      </p>
+    </div>
+  );
+}
+
+function ErrorCard({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-red-300 bg-red-50 p-6 text-sm dark:border-red-800/60 dark:bg-red-950/30">
+      <p className="font-semibold text-red-800 dark:text-red-300">
+        เชื่อมต่อ Supabase ได้ แต่เกิดข้อผิดพลาด
+      </p>
+      <p className="text-red-700 dark:text-red-300/80">{message}</p>
+      <p className="text-red-600 dark:text-red-300/60">
+        เป็นไปได้ว่ายังไม่ได้สร้างตาราง <code>notes</code> — ลองรัน SQL ใน{" "}
+        <code>supabase/schema.sql</code> ที่ SQL Editor
+      </p>
     </div>
   );
 }

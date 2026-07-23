@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next.js + Tailwind + Supabase Starter
 
-## Getting Started
+โปรเจกต์เริ่มต้นพร้อมใช้งาน: **Next.js 16 (App Router)** + **Tailwind CSS 4** + **TypeScript** เชื่อมต่อฐานข้อมูล **Supabase (Postgres)**
 
-First, run the development server:
+มาพร้อมตัวอย่างแอป "โน้ต" ที่ **อ่าน / เพิ่ม / ลบ** ข้อมูลกับฐานข้อมูลจริง
+
+---
+
+## 🚀 เริ่มใช้งาน (สำหรับคนที่ไม่เคยใช้ Supabase)
+
+### 1. สร้างโปรเจกต์ Supabase
+
+1. ไปที่ [supabase.com/dashboard](https://supabase.com/dashboard) แล้ว sign in (ใช้ GitHub ได้ ฟรี)
+2. กด **New project** → ตั้งชื่อ, ตั้ง Database Password (จดไว้), เลือก Region ใกล้ไทยสุดคือ **Southeast Asia (Singapore)**
+3. รอสักครู่ให้ Supabase สร้างฐานข้อมูลให้เสร็จ
+
+### 2. คัดลอก API keys มาใส่โปรเจกต์
+
+1. ในโปรเจกต์ Supabase ไปที่ **Project Settings** (ไอคอนเฟือง) → **API**
+2. คัดลอก 2 ค่านี้:
+   - **Project URL** → ใส่ใน `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon / public key** → ใส่ใน `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. เปิดไฟล์ [.env.local](.env.local) แล้วเติมค่า:
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+   ```
+
+### 3. สร้างตารางในฐานข้อมูล
+
+1. ในเมนูซ้ายของ Supabase ไปที่ **SQL Editor** → **New query**
+2. เปิดไฟล์ [supabase/schema.sql](supabase/schema.sql) ในโปรเจกต์นี้ คัดลอกทั้งหมดไปวาง
+3. กด **Run** — จะได้ตาราง `notes` พร้อมข้อมูลตัวอย่าง
+
+### 4. รันโปรเจกต์
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด [http://localhost:3000](http://localhost:3000) — ถ้าตั้งค่าถูก จะเห็นรายการโน้ต ลองเพิ่ม/ลบดูได้เลย 🎉
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> ถ้าเพิ่งใส่ค่าใน `.env.local` ต้อง **หยุดแล้วรัน `npm run dev` ใหม่** เพราะ Next.js อ่าน env ตอนเริ่มเท่านั้น
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 📁 โครงสร้างสำคัญ
 
-To learn more about Next.js, take a look at the following resources:
+| ไฟล์ | หน้าที่ |
+|------|---------|
+| [src/lib/supabase/client.ts](src/lib/supabase/client.ts) | Supabase client ฝั่ง browser (Client Components) |
+| [src/lib/supabase/server.ts](src/lib/supabase/server.ts) | Supabase client ฝั่ง server (Server Components / Actions) |
+| [src/lib/supabase/middleware.ts](src/lib/supabase/middleware.ts) | รีเฟรช session (ใช้ตอนทำระบบ login) |
+| [src/middleware.ts](src/middleware.ts) | เชื่อม middleware เข้ากับทุก request |
+| [src/app/page.tsx](src/app/page.tsx) | หน้าแสดงรายการโน้ต (Server Component) |
+| [src/app/actions.ts](src/app/actions.ts) | Server Actions: เพิ่ม/ลบโน้ต |
+| [supabase/schema.sql](supabase/schema.sql) | SQL สร้างตาราง + RLS policies |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🔒 เรื่องความปลอดภัย (RLS)
 
-## Deploy on Vercel
+ไฟล์ `schema.sql` เปิด **Row Level Security** แต่ตั้ง policy ให้ทุกคน (`anon`) อ่าน/เขียน/ลบได้ เพื่อให้ **ทดลองง่าย** โดยยังไม่ต้องทำระบบ login
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+⚠️ **ก่อนขึ้นใช้งานจริง (production)** ควรแก้ policy ให้ผูกกับผู้ใช้ที่ login แล้ว เช่น `using (auth.uid() = user_id)` — บอกผมได้ถ้าอยากให้ทำระบบ Auth ต่อ
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🧩 การใช้งาน Supabase ในโค้ด
+
+**ฝั่ง Server** (Server Component / Server Action):
+
+```ts
+import { createClient } from "@/lib/supabase/server";
+
+const supabase = await createClient();
+const { data } = await supabase.from("notes").select("*");
+```
+
+**ฝั่ง Client** (Client Component ที่มี `"use client"`):
+
+```ts
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
+const { data } = await supabase.from("notes").select("*");
+```
