@@ -1,5 +1,8 @@
+import { redirect } from "next/navigation";
+import prisma from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { addNote, deleteNote } from "./actions";
+import { logout } from "./auth/actions";
 
 type Note = {
   id: number;
@@ -7,38 +10,62 @@ type Note = {
   created_at: string;
 };
 
-// ตรวจว่าตั้งค่า env แล้วหรือยัง
+// ตรวจว่าตั้งค่า connection string ของ Prisma แล้วหรือยัง
 const isConfigured =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  !!process.env.DATABASE_URL &&
+  !process.env.DATABASE_URL.includes("[YOUR-PASSWORD]");
 
 export default async function Home() {
+  // ด่านตรวจสิทธิ์: ยังไม่ login → เด้งไปหน้า /login
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   let notes: Note[] = [];
   let errorMessage: string | null = null;
 
   if (isConfigured) {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("notes")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) errorMessage = error.message;
-    else notes = (data as Note[]) ?? [];
+    try {
+      // ดึงเฉพาะโน้ตของผู้ใช้คนนี้ (Prisma ข้าม RLS จึงต้องกรอง userId เองในโค้ด)
+      const rows = await prisma.note.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+      });
+      // แปลง BigInt id → number และ Date → string ให้ตรงกับ type Note
+      notes = rows.map((n) => ({
+        id: Number(n.id),
+        title: n.title,
+        created_at: n.createdAt.toISOString(),
+      }));
+    } catch (e) {
+      errorMessage = e instanceof Error ? e.message : String(e);
+    }
   }
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-6 py-16">
       <header className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-            Next.js 16 + Tailwind 4 + Supabase
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+              {user.email}
+            </span>
+          </div>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="rounded-md px-3 py-1 text-xs text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            >
+              ออกจากระบบ
+            </button>
+          </form>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">โน้ตของฉัน</h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          ตัวอย่างเชื่อมต่อฐานข้อมูล Supabase — ข้อมูลถูกเก็บใน Postgres จริง
+          โน้ตส่วนตัว — เห็นเฉพาะของคุณ เก็บใน Supabase Postgres ผ่าน Prisma
         </p>
       </header>
 
@@ -102,35 +129,25 @@ function SetupGuide() {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-amber-50 p-6 text-sm dark:border-amber-800/60 dark:bg-amber-950/30">
       <p className="font-semibold text-amber-800 dark:text-amber-300">
-        ⚠️ ยังไม่ได้เชื่อม Supabase
+        ⚠️ ยังไม่ได้ตั้งค่า Prisma connection string
       </p>
       <ol className="list-inside list-decimal space-y-2 text-amber-900 dark:text-amber-200/90">
-        <li>
-          สร้างโปรเจกต์ที่{" "}
-          <a
-            href="https://supabase.com/dashboard"
-            className="font-medium underline"
-            target="_blank"
-          >
-            supabase.com/dashboard
-          </a>
-        </li>
-        <li>
-          คัดลอก URL และ anon key จาก{" "}
-          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
-            Project Settings → API
-          </code>{" "}
-          มาใส่ในไฟล์{" "}
-          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
-            .env.local
-          </code>
-        </li>
         <li>
           รัน SQL ในไฟล์{" "}
           <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
             supabase/schema.sql
           </code>{" "}
-          ที่ SQL Editor
+          ที่ Supabase → SQL Editor เพื่อสร้างตาราง <code>notes</code>
+        </li>
+        <li>
+          คัดลอก connection string จาก{" "}
+          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
+            Supabase → Connect → ORMs → Prisma
+          </code>{" "}
+          มาใส่ <code>DATABASE_URL</code> และ <code>DIRECT_URL</code> ในไฟล์{" "}
+          <code className="rounded bg-amber-200/60 px-1 dark:bg-amber-900/60">
+            .env
+          </code>
         </li>
         <li>รีสตาร์ท dev server แล้วรีเฟรชหน้านี้</li>
       </ol>
